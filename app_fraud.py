@@ -258,8 +258,7 @@ def main():
     
     # Menu latéral
     with st.sidebar:
-        st.image("Logo - BO Fraudes in'li.png", 
-                 use_container_width=True)
+        st.sidebar.image("Logo - BO Fraudes in'li.png", width=250)
         st.markdown("---")
         
         page = st.radio(
