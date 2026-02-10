@@ -850,8 +850,8 @@ def page_accueil():
     st.markdown("""
     <div class="info-box">
     <strong>🎯 Mission</strong><br>
-    Protéger In'li et ses partenaires contre la fraude documentaire dans les dossiers de location 
-    grâce à une analyse automatisée multi-critères basée sur 40 ans d'expertise.
+    Protéger in'li contre la fraude documentaire dans les dossiers de locataires 
+    grâce à une analyse automatisée multi-critères.
     </div>
     """, unsafe_allow_html=True)
     
