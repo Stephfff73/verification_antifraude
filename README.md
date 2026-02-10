@@ -1,4 +1,4 @@
-# 🔍 In'li - Système Anti-Fraude Documentaire
+# 🔍 Système Anti-Fraude Documentaire
 
 Application de détection automatique de fraude dans les dossiers de candidature locataire.
 
@@ -286,17 +286,17 @@ pytest tests/
 
 ## 📝 Licence
 
-Propriétaire - In'li - Tous droits réservés
+Propriétaire - SA - Tous droits réservés
 
 ## 👥 Support
 
 Pour toute question ou problème :
-- Email : support@inli.fr
-- Issues GitHub : [Créer une issue](https://github.com/VOTRE_USERNAME/inli-antifraud-verification/issues)
+- Email : /
+- Issues GitHub : [Créer une issue](https://github.com/VOTRE_USERNAME/-antifraud-verification/issues)
 
 ## 🙏 Crédits
 
-Développé par l'équipe technique In'li avec l'assistance de Claude AI (Anthropic).
+Développé par l'équipe technique de SA.
 
 ---
 
