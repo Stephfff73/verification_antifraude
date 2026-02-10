@@ -1,199 +1,232 @@
 """
-Analyseur de métadonnées pour détecter les manipulations de documents
+Module d'analyse des métadonnées de documents
+Détecte les signatures de création, modification et manipulation
 """
 
-import os
-from datetime import datetime
 from PyPDF2 import PdfReader
 from PIL import Image
 from PIL.ExifTags import TAGS
 import pikepdf
+from datetime import datetime
+import os
+
+
+def analyze_document_metadata(file_path):
+    """
+    Analyse les métadonnées d'un document (PDF ou image)
+    
+    Args:
+        file_path: Chemin vers le fichier
+        
+    Returns:
+        dict: Métadonnées et signes suspects
+    """
+    
+    file_ext = os.path.splitext(file_path)[1].lower()
+    
+    if file_ext == '.pdf':
+        return analyze_pdf_metadata(file_path)
+    elif file_ext in ['.jpg', '.jpeg', '.png']:
+        return analyze_image_metadata(file_path)
+    else:
+        return {'error': 'Format non supporté'}
 
 
 def analyze_pdf_metadata(file_path):
     """
-    Extrait et analyse les métadonnées d'un fichier PDF
+    Extrait et analyse les métadonnées d'un PDF
     
-    Args:
-        file_path: Chemin vers le fichier PDF
-        
-    Returns:
-        dict: Métadonnées et indicateurs de fraude
+    Détecte:
+    - Logiciel de création
+    - Dates de création/modification
+    - Chiffrement
+    - Signatures de manipulation
     """
+    
     metadata = {
-        'creator': 'Unknown',
-        'producer': 'Unknown',
+        'creator': None,
+        'producer': None,
         'creation_date': None,
         'modification_date': None,
         'is_encrypted': False,
-        'page_count': 0,
-        'file_size_mb': 0,
         'suspicious_signs': [],
-        'fraud_indicators': []
+        'file_size': os.path.getsize(file_path),
+        'pages_count': 0
     }
     
     try:
-        # Taille du fichier
-        metadata['file_size_mb'] = os.path.getsize(file_path) / (1024 * 1024)
-        
-        # Extraction métadonnées avec PyPDF2
+        # Méthode 1 : PyPDF2 pour métadonnées basiques
         with open(file_path, 'rb') as f:
             reader = PdfReader(f)
-            metadata['page_count'] = len(reader.pages)
             
             if reader.metadata:
-                metadata['creator'] = str(reader.metadata.get('/Creator', 'Unknown'))
-                metadata['producer'] = str(reader.metadata.get('/Producer', 'Unknown'))
-                metadata['creation_date'] = reader.metadata.get('/CreationDate')
-                metadata['modification_date'] = reader.metadata.get('/ModDate')
+                metadata['creator'] = reader.metadata.get('/Creator', 'Unknown')
+                metadata['producer'] = reader.metadata.get('/Producer', 'Unknown')
+                metadata['creation_date'] = reader.metadata.get('/CreationDate', '')
+                metadata['modification_date'] = reader.metadata.get('/ModDate', '')
+            
+            metadata['pages_count'] = len(reader.pages)
         
-        # Analyse avancée avec pikepdf
-        with pikepdf.open(file_path, allow_overwriting_input=True) as pdf:
-            metadata['is_encrypted'] = pdf.is_encrypted
-            
-            # DÉTECTION 1: Logiciels de retouche photo
-            suspicious_creators = [
-                'Photoshop', 'GIMP', 'Paint.NET', 'Pixlr',
-                'Adobe Illustrator', 'CorelDRAW', 'Inkscape'
-            ]
-            for creator in suspicious_creators:
-                if creator.lower() in metadata['creator'].lower():
-                    metadata['suspicious_signs'].append(
-                        f'Créé avec logiciel de retouche graphique: {creator}'
-                    )
-                    metadata['fraud_indicators'].append('graphic_software')
-            
-            # DÉTECTION 2: Modification après création
-            if metadata['modification_date'] and metadata['creation_date']:
-                if metadata['modification_date'] != metadata['creation_date']:
-                    metadata['suspicious_signs'].append(
-                        'Document modifié après création initiale'
-                    )
-                    metadata['fraud_indicators'].append('post_creation_modification')
-            
-            # DÉTECTION 3: Créateur/Producteur suspect
-            suspicious_producers = [
-                'online', 'converter', 'free', 'pdf editor',
-                'smallpdf', 'ilovepdf', 'sejda'
-            ]
-            for producer in suspicious_producers:
-                if producer.lower() in metadata['producer'].lower():
-                    metadata['suspicious_signs'].append(
-                        f'Produit par outil de conversion en ligne: {metadata["producer"]}'
-                    )
-                    metadata['fraud_indicators'].append('online_tool')
-            
-            # DÉTECTION 4: Fichier PDF trop récent
-            if metadata['creation_date']:
+        # Méthode 2 : pikepdf pour analyse avancée
+        try:
+            with pikepdf.open(file_path, allow_overwriting_input=True) as pdf:
+                metadata['is_encrypted'] = pdf.is_encrypted
+                
+                # Détection de logiciels de retouche
+                creator_str = str(metadata.get('creator', '')).lower()
+                producer_str = str(metadata.get('producer', '')).lower()
+                
+                suspicious_softwares = [
+                    'photoshop', 'gimp', 'paint.net', 'inkscape',
+                    'affinity', 'pixelmator', 'sketch'
+                ]
+                
+                for soft in suspicious_softwares:
+                    if soft in creator_str or soft in producer_str:
+                        metadata['suspicious_signs'].append(
+                            f'Document créé avec un logiciel de retouche : {soft.title()}'
+                        )
+                
+                # Vérifier si modifié après création
+                if metadata['modification_date'] and metadata['creation_date']:
+                    if metadata['modification_date'] != metadata['creation_date']:
+                        metadata['suspicious_signs'].append(
+                            'Document modifié après sa création initiale'
+                        )
+                
+                # Vérifier dates dans le futur
                 try:
-                    # Parser date PDF (format D:YYYYMMDDHHmmSS)
-                    date_str = metadata['creation_date'].replace('D:', '').split('+')[0].split('-')[0]
-                    if len(date_str) >= 14:
-                        creation_datetime = datetime.strptime(date_str[:14], '%Y%m%d%H%M%S')
-                        days_old = (datetime.now() - creation_datetime).days
-                        
-                        if days_old < 7:
-                            metadata['suspicious_signs'].append(
-                                f'Document créé il y a seulement {days_old} jours'
-                            )
-                            metadata['fraud_indicators'].append('recently_created')
-                except Exception as e:
+                    if metadata['creation_date']:
+                        # Format PDF date: D:YYYYMMDDHHmmSS
+                        date_str = metadata['creation_date'].replace('D:', '').replace("'", '')[:14]
+                        if len(date_str) >= 8:
+                            year = int(date_str[:4])
+                            month = int(date_str[4:6])
+                            day = int(date_str[6:8])
+                            
+                            doc_date = datetime(year, month, day)
+                            
+                            if doc_date > datetime.now():
+                                metadata['suspicious_signs'].append(
+                                    'Date de création dans le futur !'
+                                )
+                except:
                     pass
         
+        except Exception as e:
+            metadata['suspicious_signs'].append(f'Erreur analyse avancée: {str(e)}')
+    
     except Exception as e:
-        metadata['error'] = str(e)
-        metadata['fraud_indicators'].append('analysis_error')
+        metadata['error'] = f'Erreur lecture PDF: {str(e)}'
     
     return metadata
 
 
 def analyze_image_metadata(file_path):
     """
-    Extrait et analyse les métadonnées EXIF d'une image
+    Extrait les métadonnées EXIF d'une image
     
-    Args:
-        file_path: Chemin vers le fichier image
-        
-    Returns:
-        dict: Métadonnées EXIF et indicateurs de fraude
+    Détecte:
+    - Appareil photo / scanner
+    - Logiciel de traitement
+    - GPS (si présent)
+    - Dates
     """
+    
     metadata = {
-        'exif_data': {},
         'camera_model': None,
         'software': None,
-        'datetime': None,
+        'datetime_original': None,
+        'datetime_modified': None,
         'gps_info': None,
         'suspicious_signs': [],
-        'fraud_indicators': []
+        'file_size': os.path.getsize(file_path)
     }
     
     try:
         image = Image.open(file_path)
-        
-        # Extraction EXIF
         exif_data = image.getexif()
         
         if exif_data:
             for tag_id, value in exif_data.items():
                 tag = TAGS.get(tag_id, tag_id)
-                metadata['exif_data'][tag] = str(value)
+                
+                if tag == 'Make':
+                    metadata['camera_model'] = value
+                elif tag == 'Software':
+                    metadata['software'] = value
+                elif tag == 'DateTimeOriginal':
+                    metadata['datetime_original'] = value
+                elif tag == 'DateTime':
+                    metadata['datetime_modified'] = value
+                elif tag == 'GPSInfo':
+                    metadata['gps_info'] = value
             
-            # Champs importants
-            metadata['camera_model'] = metadata['exif_data'].get('Model')
-            metadata['software'] = metadata['exif_data'].get('Software')
-            metadata['datetime'] = metadata['exif_data'].get('DateTime')
-            
-            # DÉTECTION 1: Logiciel de retouche
+            # Détection logiciels de retouche
             if metadata['software']:
-                suspicious_software = [
-                    'Photoshop', 'GIMP', 'Paint', 'Pixlr', 'Lightroom'
-                ]
-                for soft in suspicious_software:
-                    if soft.lower() in metadata['software'].lower():
+                suspicious_softwares = ['photoshop', 'gimp', 'lightroom', 'snapseed']
+                
+                for soft in suspicious_softwares:
+                    if soft in metadata['software'].lower():
                         metadata['suspicious_signs'].append(
-                            f'Image éditée avec: {metadata["software"]}'
+                            f'Image traitée avec {soft.title()}'
                         )
-                        metadata['fraud_indicators'].append('image_editing_software')
             
-            # DÉTECTION 2: Absence de métadonnées caméra
-            if not metadata['camera_model']:
-                metadata['suspicious_signs'].append(
-                    'Aucune information sur l\'appareil photo (possible screenshot)'
-                )
-                metadata['fraud_indicators'].append('no_camera_info')
+            # Vérifier dates
+            if metadata['datetime_original'] and metadata['datetime_modified']:
+                if metadata['datetime_original'] != metadata['datetime_modified']:
+                    metadata['suspicious_signs'].append(
+                        'Image modifiée après la prise de vue'
+                    )
         
         else:
-            # Aucune métadonnée EXIF = TRÈS suspect
             metadata['suspicious_signs'].append(
-                'AUCUNE métadonnée EXIF - Image probablement manipulée'
+                'Aucune métadonnée EXIF (potentiellement supprimée)'
             )
-            metadata['fraud_indicators'].append('no_exif_data')
-        
+    
     except Exception as e:
-        metadata['error'] = str(e)
-        metadata['fraud_indicators'].append('analysis_error')
+        metadata['error'] = f'Erreur lecture image: {str(e)}'
     
     return metadata
 
 
-def get_file_metadata(file_path):
+def detect_metadata_manipulation(metadata):
     """
-    Analyse automatique selon l'extension du fichier
+    Score de manipulation basé sur les métadonnées
     
-    Args:
-        file_path: Chemin vers le fichier
-        
     Returns:
-        dict: Métadonnées complètes
+        float: Score 0-1 (1 = très suspect)
     """
-    ext = os.path.splitext(file_path)[1].lower()
     
-    if ext == '.pdf':
-        return analyze_pdf_metadata(file_path)
-    elif ext in ['.jpg', '.jpeg', '.png', '.tiff', '.bmp']:
-        return analyze_image_metadata(file_path)
-    else:
-        return {
-            'error': f'Extension non supportée: {ext}',
-            'fraud_indicators': ['unsupported_format']
-        }
+    score = 0.0
+    
+    # +0.3 si logiciel de retouche
+    suspicious_signs = metadata.get('suspicious_signs', [])
+    for sign in suspicious_signs:
+        if 'retouche' in sign.lower() or 'photoshop' in sign.lower():
+            score += 0.3
+            break
+    
+    # +0.2 si modification après création
+    for sign in suspicious_signs:
+        if 'modifié après' in sign.lower():
+            score += 0.2
+            break
+    
+    # +0.4 si date dans le futur
+    for sign in suspicious_signs:
+        if 'futur' in sign.lower():
+            score += 0.4
+            break
+    
+    # +0.3 si métadonnées manquantes
+    for sign in suspicious_signs:
+        if 'aucune métadonnée' in sign.lower():
+            score += 0.3
+            break
+    
+    # +0.2 si document chiffré
+    if metadata.get('is_encrypted'):
+        score += 0.2
+    
+    return min(score, 1.0)
