@@ -555,8 +555,6 @@ def detect_red_flags(documents_data: Dict, structured_data: Dict, external_valid
         work = external_validations['address_work']
         
         if home and work and home.get('latitude') and work.get('latitude'):
-        
-        if home.get('latitude') and work.get('latitude'):
             distance = calculate_distance(
                 home['latitude'], home['longitude'],
                 work['latitude'], work['longitude']
@@ -569,7 +567,6 @@ def detect_red_flags(documents_data: Dict, structured_data: Dict, external_valid
                     'message': f"⚠️ Distance domicile-travail importante ({distance} km) - Vérifier télétravail",
                     'score_impact': 10
                 })
-    
     # 5. Incohérence salaire déclaré vs revenus imposables
     salaries = []
     revenus = []
