@@ -1502,8 +1502,7 @@ def main():
             st.metric("Score de fraude", f"{risk_color} {score:.1f}%")
         
         st.markdown("---")
-        st.caption("Version 3.0 ULTIME - Expert International")
-        st.caption("Avec validations externes")
+        st.caption("Version Beta Test au 11/02/2026")
     
     if page == "🏠 Accueil":
         page_accueil()
