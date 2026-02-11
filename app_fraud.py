@@ -23,7 +23,7 @@ from typing import Dict, List, Tuple, Optional
 
 # Configuration de la page
 st.set_page_config(
-    page_title="In'li - Anti-Fraude Pro v3.0",
+    page_title="In'li - Anti-Fraude",
     page_icon="🔍",
     layout="wide",
     initial_sidebar_state="expanded"
