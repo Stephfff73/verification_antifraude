@@ -5,7 +5,7 @@ streamlit>=1.31.0
 pandas>=2.0.0
 numpy>=1.24.0
 
-# PDF processing (SANS pikepdf qui nécessite qpdf système)
+# PDF processing
 PyPDF2>=3.0.0
 Pillow>=10.0.0
 
@@ -15,7 +15,11 @@ plotly>=5.18.0
 # Excel export
 openpyxl>=3.1.0
 
-# Nouveaux packages requis :
-requests>=2.31.0      # Pour appels API
-dnspython>=2.4.0      # Pour validation emails (DNS check)
-geopy>=2.4.0          # Pour calculs distance géographique
+# API calls et validations externes
+requests>=2.31.0
+
+# Validation DNS pour emails
+dnspython>=2.4.0
+
+# Calculs géographiques (distance domicile-travail)
+geopy>=2.4.0
