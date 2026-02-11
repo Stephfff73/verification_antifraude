@@ -2184,7 +2184,7 @@ def page_validations_externes():
 def page_red_flags():
     """NOUVELLE PAGE - Affichage des Red Flags Expert"""
     
-    st.markdown("## 🚨 Red Flags - Signaux d'Alerte Expert")
+    st.markdown("## 🚨 Red Flags")
     
     if not st.session_state.analysis_results:
         st.warning("⚠️ Aucune analyse disponible.")
