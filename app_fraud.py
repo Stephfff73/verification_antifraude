@@ -1474,7 +1474,7 @@ def analyze_all_documents():
 def main():
     """Fonction principale de l'application"""
     
-    st.markdown('<div class="main-header">🔍 IN\'LI - DÉTECTION EXPERT DE FRAUDE v3.0</div>', 
+    st.markdown('<div class="main-header">🔍 IN\'LI - DÉTECTION DE FRAUDE DOCUMENTAIRE</div>', 
                 unsafe_allow_html=True)
     
     with st.sidebar:
@@ -1523,14 +1523,13 @@ def main():
 
 
 def page_accueil():
-    """Page d'accueil VERSION 3.0"""
+    """Page d'accueil professionnelle"""
     
-    st.markdown("## 👋 Plateforme Expert Anti-Fraude avec Validations Externes")
-    
+    st.markdown("## 👋 Bienvenue sur la plateforme professionnelle de détection de fraude")
     st.markdown("""
     <div class="external-check">
-    <strong>🆕 NOUVEAU - VERSION 3.0</strong><br>
-    Validation externe automatique via APIs officielles :
+    <strong>🆕 NOUVEAU - VERSION 2.0</strong><br>
+    Validation externe automatique via APIs officielles :<br>
     • API INSEE pour vérification SIRET<br>
     • API Data.gouv pour validation adresses<br>
     • Vérification DNS pour emails<br>
@@ -1538,7 +1537,15 @@ def page_accueil():
     • Système expert de Red Flags (15+ signaux)
     </div>
     """, unsafe_allow_html=True)
+    st.markdown("""
+    <div class="info-box">
+    <strong>🎯 Mission</strong><br>
+    Protéger in'li contre la fraude documentaire dans les dossiers de locataires 
+    grâce à une analyse automatisée multi-critères des pièces justificatives et vérifications par API externes.
+    </div>
+    """, unsafe_allow_html=True)
     
+    col1, col2 = st.columns(2)    
     col1, col2 = st.columns(2)
     
     with col1:
@@ -1567,13 +1574,44 @@ def page_accueil():
         - ✅ **DNS MX** - Validation emails (intégré)
         - ✅ **Geopy** - Calculs distances (intégré)
         
-        **100% compatible Streamlit Cloud**
         """)
     
     st.markdown("---")
+    # Processus
+    st.markdown("### 🚀 Processus d'analyse en 3 étapes")
     
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("""
+        <div class="metric-card">
+            <h2 style="color: #3b82f6;">1️⃣</h2>
+            <h4>Téléchargement</h4>
+            <p>Importez les documents du dossier locataire (PDF ou images)</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div class="metric-card">
+            <h2 style="color: #10b981;">2️⃣</h2>
+            <h4>Analyse automatique</h4>
+            <p>Scan multi-critères en quelques secondes</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+        <div class="metric-card">
+            <h2 style="color: #f59e0b;">3️⃣</h2>
+            <h4>Décision éclairée</h4>
+            <p>Edition d'un rapport détaillé avec recommandation d'action pour faciliter la décision</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")    
     # KPIs
-    st.markdown("### 📈 Performances du système v3.0")
+    st.markdown("### 📈 Performances du système")
     
     col1, col2, col3, col4 = st.columns(4)
     
