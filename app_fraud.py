@@ -1347,7 +1347,7 @@ def perform_external_validations(documents_data: Dict, structured_data: Dict) ->
     quality_score = 0
     if all_sirets:
         quality_score += 30
-    if all_home_addresses or all_work_addresses:
+    if home_addresses or enterprise_addresses:
         quality_score += 30
     if all_emails:
         quality_score += 20
@@ -2255,7 +2255,7 @@ def page_accueil():
     with col1:
         st.markdown("""
         **🏢 SIRET/SIREN**
-        - + de 15 patterns différents
+        - 15 patterns différents
         - Espaces, points, tirets
         - Avec/sans labels
         - Validation Luhn
@@ -2319,27 +2319,44 @@ def page_upload():
     <div class="info-box">
     💡 <strong>Instructions</strong> : Téléchargez tous les documents du dossier.
     Le système détectera automatiquement les SIRET, adresses et autres données grâce à
-    l'extraction ultra-robuste reposant sur plus de 15 patterns par type de donnée).
+    l'extraction ultra-robuste reposant sur 15 patterns différents par type de donnée.
     </div>
     """, unsafe_allow_html=True)
 
     st.info("📋 **Formats acceptés** : PDF (recommandé), JPG, JPEG, PNG | **Taille max** : 10 MB")
 
+    # Nouvelle organisation des catégories
     doc_types = {
+        # 1. Justificatifs d'identité
+        "carte_identite_recto": {"label": "🆔 Carte d'identité (Recto)", "help": "Face avant de la CNI"},
+        "carte_identite_verso": {"label": "🆔 Carte d'identité (Verso)", "help": "Face arrière de la CNI"},
+        "permis_conduire": {"label": "🚗 Permis de conduire", "help": "Recto et verso si possible"},
+        "passeport": {"label": "✈️ Passeport", "help": "Page avec photo et identité"},
+        "titre_sejour": {"label": "🌍 Titre de séjour", "help": "Carte de séjour en cours de validité"},
+        
+        # 2. Justificatifs de revenus
         "contrat_travail": {"label": "📝 Contrat de travail", "help": "CDI, CDD, intérim ou stage"},
         "fiche_paie_1": {"label": "💰 Fiche de paie 1 (récent)", "help": "Bulletin du dernier mois"},
         "fiche_paie_2": {"label": "💰 Fiche de paie 2 (mois -1)", "help": "Bulletin avant-dernier mois"},
         "fiche_paie_3": {"label": "💰 Fiche de paie 3 (mois -2)", "help": "Bulletin il y a 2 mois"},
         "avis_imposition": {"label": "🏛️ Avis d'imposition", "help": "Dernier avis sur le revenu"},
-        "piece_identite": {"label": "🆔 Pièce d'identité", "help": "CNI, passeport ou permis"},
+        
+        # 3. Justificatifs de domicile
         "quittance_1": {"label": "🏠 Quittance loyer 1", "help": "Mois récent"},
         "quittance_2": {"label": "🏠 Quittance loyer 2", "help": "Mois -1"},
         "quittance_3": {"label": "🏠 Quittance loyer 3", "help": "Mois -2"},
+        "facture_electricite": {"label": "💡 Facture électricité", "help": "Facture de moins de 3 mois"},
+        "facture_gaz": {"label": "🔥 Facture gaz", "help": "Facture de moins de 3 mois"},
+        "facture_internet": {"label": "📡 Facture internet/téléphone", "help": "Facture de moins de 3 mois"},
     }
 
-    st.markdown("### 💼 Documents professionnels")
+    # === CATÉGORIE 1 : JUSTIFICATIFS D'IDENTITÉ ===
+    st.markdown("### 🆔 Justificatifs d'identité")
+    st.caption("Au moins un document parmi : Carte d'identité (recto + verso) OU Permis de conduire OU Passeport OU Titre de séjour")
 
-    for doc_key in ["contrat_travail", "fiche_paie_1", "fiche_paie_2", "fiche_paie_3", "avis_imposition"]:
+    identity_docs = ["carte_identite_recto", "carte_identite_verso", "permis_conduire", "passeport", "titre_sejour"]
+    
+    for doc_key in identity_docs:
         doc_info = doc_types[doc_key]
 
         with st.expander(doc_info["label"], expanded=False):
@@ -2362,9 +2379,44 @@ def page_upload():
                 st.success(f"✅ **{uploaded_file.name}** ({uploaded_file.size / 1024:.1f} KB)")
 
     st.markdown("---")
-    st.markdown("### 🏠 Documents de logement")
 
-    for doc_key in ["piece_identite", "quittance_1", "quittance_2", "quittance_3"]:
+    # === CATÉGORIE 2 : JUSTIFICATIFS DE REVENUS ===
+    st.markdown("### 💼 Justificatifs de revenus")
+    st.caption("Contrat de travail + 3 dernières fiches de paie + Avis d'imposition")
+
+    revenue_docs = ["contrat_travail", "fiche_paie_1", "fiche_paie_2", "fiche_paie_3", "avis_imposition"]
+    
+    for doc_key in revenue_docs:
+        doc_info = doc_types[doc_key]
+
+        with st.expander(doc_info["label"], expanded=False):
+            st.caption(doc_info["help"])
+
+            uploaded_file = st.file_uploader(
+                "Sélectionner le fichier",
+                type=['pdf', 'jpg', 'jpeg', 'png'],
+                key=f"uploader_{doc_key}",
+                label_visibility="collapsed"
+            )
+
+            if uploaded_file:
+                st.session_state.uploaded_files[doc_key] = {
+                    'file': uploaded_file,
+                    'name': uploaded_file.name,
+                    'type': uploaded_file.type,
+                    'size': uploaded_file.size
+                }
+                st.success(f"✅ **{uploaded_file.name}** ({uploaded_file.size / 1024:.1f} KB)")
+
+    st.markdown("---")
+
+    # === CATÉGORIE 3 : JUSTIFICATIFS DE DOMICILE ===
+    st.markdown("### 🏠 Justificatifs de domicile")
+    st.caption("3 dernières quittances de loyer OU factures (électricité, gaz, internet) de moins de 3 mois")
+
+    domicile_docs = ["quittance_1", "quittance_2", "quittance_3", "facture_electricite", "facture_gaz", "facture_internet"]
+    
+    for doc_key in domicile_docs:
         doc_info = doc_types[doc_key]
 
         with st.expander(doc_info["label"], expanded=False):
@@ -2778,7 +2830,7 @@ def page_rapport():
     st.markdown("""
     <div class="external-check">
     📊 <strong>Rapport Excel enrichi</strong><br>
-    Inclut : validations externes, extraction ultra-robuste reposant sur plus de 15 patterns,
+    Inclut : validations externes, extraction ultra-robuste reposant sur 15 patterns,
     > 20 Red Flags experts, statistiques d'extraction, scoring amélioré.
     </div>
     """, unsafe_allow_html=True)
