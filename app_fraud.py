@@ -2091,12 +2091,14 @@ def analyze_all_documents():
 # INTERFACE STREAMLIT v4.0
 # ======================
 
+
 def main():
-    """Fonction principale de l'application""
+    """Fonction principale de l'application"""
 
-    st.markdown('<div class="main-header">🔍 IN\'LI - DÉTECTION FRAUDE DOCUMENTAIRE</div>',
-                unsafe_allow_html=True)
-
+    st.markdown(
+        '<div class="main-header">🔍 IN\'LI - DÉTECTION FRAUDE DOCUMENTAIRE</div>',
+        unsafe_allow_html=True
+    )
 
     st.markdown(
         """
@@ -2112,6 +2114,7 @@ def main():
         """,
         unsafe_allow_html=True
     )
+
 
 
     with st.sidebar:
