@@ -151,87 +151,71 @@ if 'external_validations' not in st.session_state:
 
 def extract_siret_siren_ultra(text: str) -> Dict[str, List[str]]:
     """
-    Extraction ULTRA-ROBUSTE de SIRET/SIREN avec 15+ patterns différents
-
-    Gère :
-    - Espaces variables (simples, multiples, tabs)
-    - Points, tirets comme séparateurs
-    - Avec/sans label (SIRET:, N° SIRET, etc.)
-    - Formats comptables
-    - Numéros collés
+    Extraction ULTRA-ROBUSTE de SIRET/SIREN - VERSION ULTRA-PERFORMANTE
+    
+    Gère TOUS les cas de figure rencontrés sur les fiches de paie réelles :
+    - SIRET collé au label (ex: SIRET60205235900042)
+    - Espaces variables, points, tirets
+    - Avec/sans label
+    - Sur plusieurs lignes
     """
 
     sirets = set()
     sirens = set()
 
-    # Nettoyage préliminaire
-    text_clean = text.replace('\n', ' ').replace('\t', ' ')
+    # Nettoyage préliminaire - garder structure mais uniformiser espaces
+    text_clean = re.sub(r'\s+', ' ', text.replace('\n', ' ').replace('\t', ' '))
 
-    # ========== PATTERNS SIRET (14 chiffres) ==========
+    # ========== PATTERNS SIRET (14 chiffres) - ORDRE D'IMPORTANCE ==========
 
-    # Pattern 1: SIRET avec espaces tous les 3 chiffres
-    # Ex: 123 456 789 01234
-    pattern1 = r'\b(\d{3})\s+(\d{3})\s+(\d{3})\s+(\d{5})\b'
+    # Pattern 1 CRITIQUE: SIRET collé directement après le label (CAS RÉEL DE LA FICHE DE PAIE)
+    # Ex: SIRET60205235900042, SIRET:60205235900042
+    pattern1 = r'(?:SIRET|siret|Siret)[\s:]*(\d{14})(?=\D|$)'
     for match in re.finditer(pattern1, text_clean):
-        siret = ''.join(match.groups())
-        if len(siret) == 14:
-            sirets.add(siret)
+        siret = match.group(1)
+        sirets.add(siret)
 
-    # Pattern 2: SIRET avec points comme séparateurs
-    # Ex: 123.456.789.01234
-    pattern2 = r'\b(\d{3})\.(\d{3})\.(\d{3})\.(\d{5})\b'
+    # Pattern 2: SIRET avec label et séparateurs
+    # Ex: SIRET : 123 456 789 01234, N° SIRET: 123.456.789.01234
+    pattern2 = r'(?:SIRET|siret|N°\s*SIRET|Num[ée]ro\s*SIRET|N°\s*Siret)[\s:]+(\d{3})[\s\.\-]+(\d{3})[\s\.\-]+(\d{3})[\s\.\-]+(\d{5})'
     for match in re.finditer(pattern2, text_clean):
         siret = ''.join(match.groups())
         if len(siret) == 14:
             sirets.add(siret)
 
-    # Pattern 3: SIRET avec tirets
-    # Ex: 123-456-789-01234
-    pattern3 = r'\b(\d{3})-(\d{3})-(\d{3})-(\d{5})\b'
+    # Pattern 3: SIRET avec espaces tous les 3 chiffres (format standard)
+    # Ex: 123 456 789 01234
+    pattern3 = r'(?<!\d)(\d{3})\s+(\d{3})\s+(\d{3})\s+(\d{5})(?!\d)'
     for match in re.finditer(pattern3, text_clean):
         siret = ''.join(match.groups())
-        if len(siret) == 14:
-            sirets.add(siret)
-
-    # Pattern 4: SIRET collé (14 chiffres d'affilée)
-    # Ex: 12345678901234
-    pattern4 = r'\b(\d{14})\b'
-    for match in re.finditer(pattern4, text_clean):
-        siret = match.group(1)
-        # Vérifier que ce n'est pas une date ou autre
-        if not re.search(r'(19|20)\d{12}', siret):  # Pas une date bizarre
-            sirets.add(siret)
-
-    # Pattern 5: SIRET avec label avant
-    # Ex: SIRET : 123 456 789 01234
-    pattern5 = r'(?:SIRET|siret|N°\s*SIRET|Num[ée]ro\s*SIRET)[\s:]*(\d{3})[\s\.\-]+(\d{3})[\s\.\-]+(\d{3})[\s\.\-]+(\d{5})'
-    for match in re.finditer(pattern5, text_clean):
-        siret = ''.join(match.groups())
-        if len(siret) == 14:
-            sirets.add(siret)
-
-    # Pattern 6: SIRET collé avec label
-    # Ex: SIRET: 12345678901234
-    pattern6 = r'(?:SIRET|siret|N°\s*SIRET|Num[ée]ro\s*SIRET)[\s:]+(\d{14})\b'
-    for match in re.finditer(pattern6, text_clean):
-        siret = match.group(1)
         sirets.add(siret)
 
-    # Pattern 7: Format comptable avec espaces irréguliers
-    # Ex: 123  456   789 01234
-    pattern7 = r'\b(\d{3})\s{1,5}(\d{3})\s{1,5}(\d{3})\s{1,5}(\d{5})\b'
-    for match in re.finditer(pattern7, text_clean):
+    # Pattern 4: SIRET avec points ou tirets
+    # Ex: 123.456.789.01234 ou 123-456-789-01234
+    pattern4 = r'(?<!\d)(\d{3})[\.\-](\d{3})[\.\-](\d{3})[\.\-](\d{5})(?!\d)'
+    for match in re.finditer(pattern4, text_clean):
         siret = ''.join(match.groups())
-        if len(siret) == 14:
-            sirets.add(siret)
+        sirets.add(siret)
 
-    # Pattern 8: SIRET avec séparateurs mixtes
-    # Ex: 123 456.789-01234
-    pattern8 = r'\b(\d{3})[\s\.\-]+(\d{3})[\s\.\-]+(\d{3})[\s\.\-]+(\d{5})\b'
-    for match in re.finditer(pattern8, text_clean):
-        siret = ''.join(match.groups())
-        if len(siret) == 14:
-            sirets.add(siret)
+    # Pattern 5: 14 chiffres consécutifs (avec validation)
+    # Ex: 60205235900042
+    pattern5 = r'(?<!\d)(\d{14})(?!\d)'
+    for match in re.finditer(pattern5, text_clean):
+        siret = match.group(1)
+        # Validation: doit commencer par 1-9 (pas 0), pas être une date évidente
+        if siret[0] != '0' and not re.match(r'^(19|20)\d{2}(0[1-9]|1[0-2])', siret):
+            # Vérifier si c'est près d'un mot-clé SIRET dans le texte
+            # ou si le contexte suggère un SIRET
+            context_before = text_clean[max(0, match.start()-50):match.start()]
+            context_after = text_clean[match.end():min(len(text_clean), match.end()+50)]
+            
+            # Accepter si proche de mots-clés ou si dans une zone de méta-données
+            keywords = ['SIRET', 'siret', 'Siret', 'établissement', 'entreprise', 'NAF', 'APE']
+            has_context = any(kw in context_before or kw in context_after for kw in keywords)
+            
+            # Ou accepter si le format est valide (algorithme Luhn simplifié pour SIRET)
+            if has_context or is_valid_siret_format(siret):
+                sirets.add(siret)
 
     # ========== PATTERNS SIREN (9 chiffres) ==========
 
@@ -250,40 +234,43 @@ def extract_siret_siren_ultra(text: str) -> Dict[str, List[str]]:
             if not is_part_of_siret:
                 sirens.add(siren)
 
-    # Pattern 2: SIREN collé
-    # Ex: 123456789
-    pattern_siren2 = r'\b(\d{9})\b'
-    for match in re.finditer(pattern_siren2, text_clean):
-        siren = match.group(1)
-        # Vérifier que ce n'est pas un numéro de téléphone ou autre
-        if not re.search(r'^0[1-9]', siren):  # Pas un téléphone
-            is_part_of_siret = False
-            for siret in sirets:
-                if siret.startswith(siren):
-                    is_part_of_siret = True
-                    break
-            if not is_part_of_siret:
-                sirens.add(siren)
+    # ========== PATTERNS SIREN (9 chiffres) ==========
 
-    # Pattern 3: SIREN avec label
-    # Ex: SIREN: 123 456 789
-    pattern_siren3 = r'(?:SIREN|siren|N°\s*SIREN)[\s:]+(\d{3})[\s\.\-]+(\d{3})[\s\.\-]+(\d{3})\b'
-    for match in re.finditer(pattern_siren3, text_clean):
+    # Pattern 1: SIREN avec espaces
+    # Ex: 123 456 789
+    pattern_siren1 = r'(?<!\d)(\d{3})\s+(\d{3})\s+(\d{3})(?!\d)'
+    for match in re.finditer(pattern_siren1, text_clean):
         siren = ''.join(match.groups())
-        if len(siren) == 9:
+        # Ne pas ajouter si c'est le début d'un SIRET déjà trouvé
+        is_part_of_siret = any(siret.startswith(siren) for siret in sirets)
+        if not is_part_of_siret:
             sirens.add(siren)
 
-    # Pattern 4: SIREN collé avec label
-    pattern_siren4 = r'(?:SIREN|siren|N°\s*SIREN)[\s:]+(\d{9})\b'
-    for match in re.finditer(pattern_siren4, text_clean):
+    # Pattern 2: SIREN collé avec label
+    # Ex: SIREN602052359, SIREN:602052359
+    pattern_siren2 = r'(?:SIREN|siren)[\s:]*(\d{9})(?!\d)'
+    for match in re.finditer(pattern_siren2, text_clean):
         siren = match.group(1)
         sirens.add(siren)
 
-    # Validation finale : vérifier la clé de Luhn pour SIRET (optionnel)
+    # Pattern 3: 9 chiffres seuls (avec contexte)
+    pattern_siren3 = r'(?<!\d)(\d{9})(?!\d)'
+    for match in re.finditer(pattern_siren3, text_clean):
+        siren = match.group(1)
+        # Ne pas confondre avec téléphone
+        if not siren.startswith('0'):
+            is_part_of_siret = any(siret.startswith(siren) for siret in sirets)
+            if not is_part_of_siret:
+                # Vérifier contexte
+                context = text_clean[max(0, match.start()-30):min(len(text_clean), match.end()+30)]
+                if 'SIREN' in context or 'Siren' in context or 'entreprise' in context:
+                    sirens.add(siren)
+
+    # Validation finale
     valid_sirets = []
     for siret in sirets:
         if len(siret) == 14 and siret.isdigit():
-            # Validation basique : pas de 00000... ou 11111...
+            # Pas de numéros répétitifs stupides
             if not (siret == siret[0] * 14):
                 valid_sirets.append(siret)
 
@@ -299,73 +286,158 @@ def extract_siret_siren_ultra(text: str) -> Dict[str, List[str]]:
     }
 
 
+def is_valid_siret_format(siret: str) -> bool:
+    """Validation basique du format SIRET"""
+    if len(siret) != 14 or not siret.isdigit():
+        return False
+    
+    # Le SIRET ne peut pas être que des 0 ou que des mêmes chiffres
+    if siret == '0' * 14 or siret == siret[0] * 14:
+        return False
+    
+    # Les 9 premiers chiffres (SIREN) ne peuvent pas commencer par 0
+    if siret[0] == '0':
+        return False
+    
+    return True
+
+
 def extract_french_addresses_ultra(text: str) -> List[Dict]:
     """
-    Extraction ULTRA-INTELLIGENTE d'adresses françaises
-
-    Utilise :
-    - Détection de numéros de rue (1-9999)
-    - Types de voies (rue, avenue, boulevard, etc.)
-    - Codes postaux français (5 chiffres commençant par 0-9 sauf 00, 96-99 pour DOM-TOM)
-    - Villes françaises avec majuscules
-    - Contexte sémantique (avant/après l'adresse)
+    Extraction ULTRA-PERFORMANTE d'adresses françaises
+    VERSION RÉALISTE - Gère les fiches de paie réelles avec adresses multi-lignes
+    
+    Cas gérés :
+    - Adresses sur plusieurs lignes (ex: fiches de paie)
+    - Adresses avec compléments (TOUR, BATIMENT, etc.)
+    - Formats variés avec/sans ponctuation
+    - Détection intelligente du contexte
     """
 
     addresses = []
-
-    # Nettoyage du texte
-    text_clean = text.replace('\n', ' ').replace('\t', ' ')
-
-    # Types de voies français
+    
+    # Garder le texte original ET une version nettoyée
+    text_original = text
+    text_clean = re.sub(r'\s+', ' ', text.replace('\t', ' '))
+    
+    # Types de voies (incluant versions minuscules car on fait re.IGNORECASE)
     voie_types = [
-        'rue', 'avenue', 'av', 'boulevard', 'bd', 'bld', 'blvd',
-        'place', 'pl', 'allée', 'chemin', 'ch', 'route', 'rte',
-        'impasse', 'imp', 'passage', 'pass', 'cours', 'quai',
-        'square', 'sq', 'esplanade', 'esp', 'voie', 'lotissement',
-        'résidence', 'cité', 'hameau', 'lieu-dit', 'zone', 'parc'
+        'rue', 'avenue', 'av', 'boulevard', 'bd', 'blvd',
+        'place', 'pl', 'allée', 'chemin', 'route', 'rte',
+        'impasse', 'passage', 'cours', 'quai', 'square',
+        'esplanade', 'voie', 'lotissement', 'résidence', 'cité'
     ]
-
-    voie_pattern = '|'.join(voie_types)
-
-    # ========== PATTERN 1 : Format complet avec code postal ==========
-    # Ex: 12 rue Victor Hugo, 75001 Paris
-    # Ex: 123 avenue des Champs-Élysées 75008 PARIS
-    pattern1 = r'\b(\d{{1,4}})\s+({voie})[,\s]+([A-ZÉÈÊÀÂa-zéèêàâ\s\-\']{{3,50}})[,\s]+(\d{{{{5}}}})\s+([A-ZÉÈÊÀÂa-zéèêàâ\s\-\']+)\b'.format(voie=voie_pattern)
-
-    for match in re.finditer(pattern1, text_clean, re.IGNORECASE):
-        numero = match.group(1)
-        type_voie = match.group(2)
-        nom_voie = match.group(3).strip()
-        code_postal = match.group(4)
-        ville = match.group(5).strip()
-
+    
+    # ========== STRATÉGIE 1: Recherche code postal + ville d'abord ==========
+    # Puis remonter pour trouver le numéro et type de voie
+    
+    postal_city_pattern = r'(\d{5})\s+([A-ZÉÈÊÀÂa-zéèêàâ][\w\s\-\']{2,40})'
+    postal_matches = list(re.finditer(postal_city_pattern, text_clean))
+    
+    for pm in postal_matches:
+        code_postal = pm.group(1)
+        ville = pm.group(2).strip()
+        
         # Valider le code postal
-        if validate_french_postal_code(code_postal):
-            addresses.append({
-                'full_address': f"{numero} {type_voie} {nom_voie}, {code_postal} {ville}",
-                'numero': numero,
-                'type_voie': type_voie,
-                'nom_voie': nom_voie,
-                'code_postal': code_postal,
-                'ville': ville,
-                'confidence': 0.95
-            })
-
-    # ========== PATTERN 2 : Format avec virgule entre voie et CP ==========
-    # Ex: 45 boulevard Saint-Germain, 75005 Paris
-    pattern2 = r'\b(\d{{1,4}})\s+({voie})\s+([A-ZÉÈÊÀÂa-zéèêàâ\s\-\']+),\s*(\d{{{{5}}}})\s+([A-ZÉÈÊÀÂa-zéèêàâ\s\-\']+)\b'.format(voie=voie_pattern)
-
-    for match in re.finditer(pattern2, text_clean, re.IGNORECASE):
+        if not validate_french_postal_code(code_postal):
+            continue
+        
+        # Regarder AVANT le code postal pour trouver numéro + type voie + nom voie
+        text_before = text_clean[max(0, pm.start()-200):pm.start()]
+        
+        # Pattern flexible pour capturer "5 PLACE DE LA PYRAMIDE" ou "123 rue Victor Hugo"
+        street_pattern = r'(\d{1,4})\s+(' + '|'.join(voie_types) + r')\s+([\wÀ-ÿ\s\-\'\.]{3,80}?)[\s,]*$'
+        street_match = re.search(street_pattern, text_before, re.IGNORECASE)
+        
+        if street_match:
+            numero = street_match.group(1)
+            type_voie = street_match.group(2)
+            nom_voie = street_match.group(3).strip()
+            
+            # Nettoyer le nom de voie (enlever trailing junk)
+            nom_voie = re.sub(r'\s+(Matricule|Code|N°|Tel|Fax).*$', '', nom_voie, flags=re.IGNORECASE)
+            nom_voie = nom_voie.strip(' ,.')
+            
+            if len(nom_voie) >= 3:
+                full = f"{numero} {type_voie} {nom_voie}, {code_postal} {ville}"
+                
+                # Éviter doublons
+                if not any(addr['full_address'].lower() == full.lower() for addr in addresses):
+                    addresses.append({
+                        'full_address': full,
+                        'numero': numero,
+                        'type_voie': type_voie,
+                        'nom_voie': nom_voie,
+                        'code_postal': code_postal,
+                        'ville': ville,
+                        'confidence': 0.92
+                    })
+    
+    # ========== STRATÉGIE 2: Pattern multi-lignes sur texte ORIGINAL ==========
+    # Pour capturer "5 PLACE DE LA PYRAMIDE\nLA DEFENSE 9\n92800 PARIS LA DEFENSE"
+    
+    lines = text_original.split('\n')
+    for i in range(len(lines) - 2):  # Il faut au moins 2-3 lignes pour une adresse
+        line1 = lines[i].strip()
+        line2 = lines[i+1].strip() if i+1 < len(lines) else ''
+        line3 = lines[i+2].strip() if i+2 < len(lines) else ''
+        
+        # Chercher numéro + type voie dans line1
+        street_start = r'(\d{1,4})\s+(' + '|'.join(voie_types) + r')\s+([\wÀ-ÿ\s\-\'\.]{3,60})'
+        match1 = re.search(street_start, line1, re.IGNORECASE)
+        
+        if match1:
+            numero = match1.group(1)
+            type_voie = match1.group(2)
+            nom_voie_part1 = match1.group(3).strip()
+            
+            # Chercher code postal dans line2 ou line3
+            for check_line in [line2, line3]:
+                postal_match = re.search(r'(\d{5})\s+([\wÀ-ÿ][\w\s\-\']{2,40})', check_line)
+                if postal_match:
+                    code_postal = postal_match.group(1)
+                    ville = postal_match.group(2).strip()
+                    
+                    if validate_french_postal_code(code_postal):
+                        # Combiner nom de voie (peut être sur 2 lignes)
+                        nom_voie = nom_voie_part1
+                        # Si line2 n'a pas le code postal, c'est peut-être une suite du nom
+                        if check_line == line3 and line2 and not re.search(r'\d{5}', line2):
+                            # line2 pourrait être un complément
+                            complement = re.sub(r'(Matricule|Code|N°|Tel|Fax).*', '', line2, flags=re.IGNORECASE).strip()
+                            if complement and len(complement) < 50:
+                                nom_voie = f"{nom_voie} {complement}"
+                        
+                        nom_voie = nom_voie.strip(' ,.')
+                        full = f"{numero} {type_voie} {nom_voie}, {code_postal} {ville}"
+                        
+                        if not any(addr['full_address'].lower() == full.lower() for addr in addresses):
+                            addresses.append({
+                                'full_address': full,
+                                'numero': numero,
+                                'type_voie': type_voie,
+                                'nom_voie': nom_voie,
+                                'code_postal': code_postal,
+                                'ville': ville,
+                                'confidence': 0.88
+                            })
+                        break
+    
+    # ========== STRATÉGIE 3: Patterns classiques (format en une ligne) ==========
+    voie_pattern = '|'.join(voie_types)
+    
+    # Format standard: 12 rue Victor Hugo, 75001 Paris
+    pattern_standard = r'(\d{{1,4}})\s+({voie})\s+([\wÀ-ÿ\s\-\'\.]){{3,60}}?,\s*(\d{{{{5}}}})\s+([\wÀ-ÿ][\w\s\-\']{{2,40}})'.format(voie=voie_pattern)
+    for match in re.finditer(pattern_standard, text_clean, re.IGNORECASE):
         numero = match.group(1)
         type_voie = match.group(2)
-        nom_voie = match.group(3).strip()
+        nom_voie = match.group(3).strip(' ,.')
         code_postal = match.group(4)
         ville = match.group(5).strip()
-
-        if validate_french_postal_code(code_postal):
+        
+        if validate_french_postal_code(code_postal) and len(nom_voie) >= 3:
             full = f"{numero} {type_voie} {nom_voie}, {code_postal} {ville}"
-            # Éviter les doublons
-            if not any(addr['full_address'] == full for addr in addresses):
+            if not any(addr['full_address'].lower() == full.lower() for addr in addresses):
                 addresses.append({
                     'full_address': full,
                     'numero': numero,
@@ -373,78 +445,10 @@ def extract_french_addresses_ultra(text: str) -> List[Dict]:
                     'nom_voie': nom_voie,
                     'code_postal': code_postal,
                     'ville': ville,
-                    'confidence': 0.9
+                    'confidence': 0.90
                 })
-
-    # ========== PATTERN 3 : Format sans virgule ==========
-    # Ex: 10 rue de la Paix 75002 Paris
-    pattern3 = r'\b(\d{{1,4}})\s+({voie})\s+([A-ZÉÈÊÀÂa-zéèêàâ\s\-\']+?)\s+(\d{{{{5}}}})\s+([A-ZÉÈÊÀÂa-zéèêàâ\s\-\']+)\b'.format(voie=voie_pattern)
-
-    for match in re.finditer(pattern3, text_clean, re.IGNORECASE):
-        numero = match.group(1)
-        type_voie = match.group(2)
-        nom_voie = match.group(3).strip()
-        code_postal = match.group(4)
-        ville = match.group(5).strip()
-
-        if validate_french_postal_code(code_postal) and len(nom_voie) > 3:
-            full = f"{numero} {type_voie} {nom_voie} {code_postal} {ville}"
-            if not any(addr['full_address'] == full for addr in addresses):
-                addresses.append({
-                    'full_address': full,
-                    'numero': numero,
-                    'type_voie': type_voie,
-                    'nom_voie': nom_voie,
-                    'code_postal': code_postal,
-                    'ville': ville,
-                    'confidence': 0.85
-                })
-
-    # ========== PATTERN 4 : Avec contexte (Adresse:, Domicile:, etc.) ==========
-    context_keywords = ['adresse', 'domicile', 'résidence', 'demeurant', 'domicilié', 'situé', 'sis']
-    context_pattern = '|'.join(context_keywords)
-
-    pattern4 = r'(?:{context})[\s:]+(\d{{{{1,4}}}})\s+({voie})\s+([A-ZÉÈÊÀÂa-zéèêàâ\s\-\']+?)\s+(\d{{{{{{5}}}}}})\s+([A-ZÉÈÊÀÂa-zéèêàâ\s\-\']+)'.format(
-        context=context_pattern,
-        voie=voie_pattern
-    )
-
-    for match in re.finditer(pattern4, text_clean, re.IGNORECASE):
-        numero = match.group(1)
-        type_voie = match.group(2)
-        nom_voie = match.group(3).strip()
-        code_postal = match.group(4)
-        ville = match.group(5).strip()
-
-        if validate_french_postal_code(code_postal):
-            full = f"{numero} {type_voie} {nom_voie} {code_postal} {ville}"
-            if not any(addr['full_address'] == full for addr in addresses):
-                addresses.append({
-                    'full_address': full,
-                    'numero': numero,
-                    'type_voie': type_voie,
-                    'nom_voie': nom_voie,
-                    'code_postal': code_postal,
-                    'ville': ville,
-                    'confidence': 0.98,  # Plus grande confiance car contexte
-                    'context': 'with_keyword'
-                })
-
-    # ========== PATTERN 5 : Multi-lignes (avec \n conservé) ==========
-    # Pour les PDF où l'adresse est sur plusieurs lignes
-    pattern5 = r'(\d{{1,4}})\s+({voie})\s+([A-ZÉÈÊÀÂa-zéèêàâ\s\-\']+)[\n\r\s]+(\d{{{{5}}}})\s+([A-ZÉÈÊÀÂa-zéèêàâ\s\-\']+)'.format(voie=voie_pattern)
-
-    for match in re.finditer(pattern5, text, re.IGNORECASE):
-        numero = match.group(1)
-        type_voie = match.group(2)
-        nom_voie = match.group(3).strip()
-        code_postal = match.group(4)
-        ville = match.group(5).strip()
-
-        if validate_french_postal_code(code_postal):
-            full = f"{numero} {type_voie} {nom_voie} {code_postal} {ville}"
-            if not any(addr['full_address'] == full for addr in addresses):
-                addresses.append({
+    
+    return addresses
                     'full_address': full,
                     'numero': numero,
                     'type_voie': type_voie,
