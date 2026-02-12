@@ -354,11 +354,15 @@ def extract_french_addresses_ultra(text: str) -> List[Dict]:
             type_voie = street_match.group(2)
             nom_voie = street_match.group(3).strip()
             
-            # Nettoyer le nom de voie (enlever trailing junk)
-            nom_voie = re.sub(r'\s+(Matricule|Code|N°|Tel|Fax).*$', '', nom_voie, flags=re.IGNORECASE)
+            # NETTOYAGE ULTRA-ROBUSTE du nom de voie
+            # Enlever tout ce qui vient après les mots-clés de métadonnées
+            nom_voie = re.split(r'\s+(Matricule|Code|N°|Tel|Telephone|Fax|Email|Classification|Catégorie|Poste|Ancienneté|Date)', nom_voie, flags=re.IGNORECASE)[0]
             nom_voie = nom_voie.strip(' ,.')
             
-            if len(nom_voie) >= 3:
+            # Enlever les chiffres isolés à la fin (probablement des codes)
+            nom_voie = re.sub(r'\s+\d{4,}$', '', nom_voie)
+            
+            if len(nom_voie) >= 3 and len(nom_voie) <= 60:  # Nom de voie raisonnable
                 full = f"{numero} {type_voie} {nom_voie}, {code_postal} {ville}"
                 
                 # Éviter doublons
@@ -721,7 +725,12 @@ API_CONFIG = {
 # ======================
 
 def validate_siret_insee(siret: str) -> Dict:
-    """Validation SIRET via API INSEE SIRENE"""
+    """
+    Validation SIRET via API INSEE SIRENE (API publique)
+    
+    Note: L'API INSEE nécessite une clé d'API pour un usage en production.
+    En fallback, on utilise l'API Annuaire des Entreprises (data.gouv.fr)
+    """
 
     result = {
         'valid': False,
@@ -732,7 +741,7 @@ def validate_siret_insee(siret: str) -> Dict:
         'creation_date': None,
         'activity': None,
         'error': None,
-        'api_used': 'INSEE SIRENE'
+        'api_used': 'API Annuaire Entreprises'
     }
 
     if not siret or len(siret) != 14:
@@ -740,63 +749,74 @@ def validate_siret_insee(siret: str) -> Dict:
         return result
 
     try:
-        url = f"https://eur03.safelinks.protection.outlook.com/?url=https%3A%2F%2Fapi.insee.fr%2Fentreprises%2Fsirene%2FV3.11%2Fsiret%2F&data=05%7C02%7Cstephanie.ammi%40inli.fr%7Cb1f4a3b8d30e4f2dde5d08de6a3b7eef%7C01a91ab5c50b4c0d8cfb59bc713898ab%7C0%7C0%7C639065000978317983%7CUnknown%7CTWFpbGZsb3d8eyJFbXB0eU1hcGkiOnRydWUsIlYiOiIwLjAuMDAwMCIsIlAiOiJXaW4zMiIsIkFOIjoiTWFpbCIsIldUIjoyfQ%3D%3D%7C0%7C%7C%7C&sdata=6rGlhFG36bwTgDCErUWwfHN7PdvrJyBlyqBXbzfRll4%3D&reserved=0{siret}"
-
-        response = requests.get(
-            url,
-            headers={'Accept': 'application/json'},
-            timeout=5
-        )
-
+        # API Annuaire des Entreprises (data.gouv.fr) - GRATUITE et PUBLIQUE
+        url = f"https://recherche-entreprises.api.gouv.fr/search?q={siret}"
+        
+        response = requests.get(url, timeout=10)
+        
         if response.status_code == 200:
             data = response.json()
-
-            if 'etablissement' in data:
-                etab = data['etablissement']
-
+            
+            if data.get('results') and len(data['results']) > 0:
+                entreprise = data['results'][0]
+                
                 result['valid'] = True
                 result['exists'] = True
-
-                # Raison sociale
-                unite_legale = etab.get('uniteLegale', {})
+                
+                # Nom de l'entreprise
                 result['company_name'] = (
-                    unite_legale.get('denominationUniteLegale') or
-                    unite_legale.get('nomUniteLegale') or
+                    entreprise.get('nom_complet') or 
+                    entreprise.get('nom_raison_sociale') or
+                    entreprise.get('denomination') or
                     'Non renseigné'
                 )
-
-                # Adresse complète
-                adresse = etab.get('adresseEtablissement', {})
-                parts = [
-                    adresse.get('numeroVoieEtablissement', ''),
-                    adresse.get('typeVoieEtablissement', ''),
-                    adresse.get('libelleVoieEtablissement', ''),
-                ]
-                rue = ' '.join([p for p in parts if p]).strip()
-
-                result['address'] = f"{rue}, {adresse.get('codePostalEtablissement', '')} {adresse.get('libelleCommuneEtablissement', '')}"
-
+                
+                # Adresse du siège
+                siege = entreprise.get('siege', {})
+                if siege:
+                    adresse_parts = [
+                        siege.get('numero_voie', ''),
+                        siege.get('type_voie', ''),
+                        siege.get('libelle_voie', ''),
+                    ]
+                    rue = ' '.join([str(p) for p in adresse_parts if p]).strip()
+                    
+                    cp = siege.get('code_postal', '')
+                    ville = siege.get('libelle_commune', '')
+                    
+                    if rue and cp and ville:
+                        result['address'] = f"{rue}, {cp} {ville}"
+                    elif cp and ville:
+                        result['address'] = f"{cp} {ville}"
+                
                 # Statut
-                periodes = etab.get('periodesEtablissement', [])
-                if periodes:
-                    etat = periodes[0].get('etatAdministratifEtablissement', 'A')
-                    result['status'] = 'Active' if etat == 'A' else 'Fermée'
+                if entreprise.get('etat_administratif') == 'A':
+                    result['status'] = 'Actif'
                 else:
-                    result['status'] = 'Active'
-
-                # Date création
-                result['creation_date'] = etab.get('dateCreationEtablissement', 'Non renseignée')
-
-                # Activité
-                result['activity'] = unite_legale.get('activitePrincipaleUniteLegale', 'Non renseignée')
-
+                    result['status'] = 'Cessé'
+                
+                # Date de création
+                result['creation_date'] = entreprise.get('date_creation')
+                
+                # Activité (NAF/APE)
+                activite_principale = entreprise.get('activite_principale')
+                if activite_principale:
+                    result['activity'] = f"NAF {activite_principale}"
+                
+            else:
+                result['error'] = "SIRET introuvable dans la base"
+                
         elif response.status_code == 404:
-            result['error'] = "SIRET introuvable dans la base INSEE"
+            result['error'] = "SIRET introuvable"
+        elif response.status_code == 429:
+            result['error'] = "Trop de requêtes - Réessayez dans quelques secondes"
         else:
-            result['error'] = f"Erreur API INSEE (code {response.status_code})"
+            result['error'] = f"Erreur API (code {response.status_code})"
 
     except requests.Timeout:
-        result['error'] = "Timeout - API INSEE non accessible"
+        result['error'] = "Timeout - API non accessible"
+    except requests.RequestException as e:
+        result['error'] = f"Erreur réseau : {str(e)}"
     except Exception as e:
         result['error'] = f"Erreur technique : {str(e)}"
 
@@ -808,7 +828,7 @@ def validate_siret_insee(siret: str) -> Dict:
 # ======================
 
 def validate_address_gouv(address: str) -> Dict:
-    """Validation adresse via API Adresse Data.gouv.fr"""
+    """Validation adresse via API Adresse Data.gouv.fr (API publique gratuite)"""
 
     result = {
         'valid': False,
@@ -827,18 +847,19 @@ def validate_address_gouv(address: str) -> Dict:
         return result
 
     try:
-        url = "https://eur03.safelinks.protection.outlook.com/?url=https%3A%2F%2Fapi-adresse.data.gouv.fr%2Fsearch%2F&data=05%7C02%7Cstephanie.ammi%40inli.fr%7Cb1f4a3b8d30e4f2dde5d08de6a3b7eef%7C01a91ab5c50b4c0d8cfb59bc713898ab%7C0%7C0%7C639065000978341023%7CUnknown%7CTWFpbGZsb3d8eyJFbXB0eU1hcGkiOnRydWUsIlYiOiIwLjAuMDAwMCIsIlAiOiJXaW4zMiIsIkFOIjoiTWFpbCIsIldUIjoyfQ%3D%3D%7C0%7C%7C%7C&sdata=25qSa54%2BOniXelvUNytcOLNWhmrpzoxqmqRSuf3dv2o%3D&reserved=0"
-
+        # API Adresse Data.gouv.fr - VRAIE URL PUBLIQUE
+        url = "https://api-adresse.data.gouv.fr/search/"
+        
         response = requests.get(
             url,
             params={'q': address, 'limit': 1},
-            timeout=5
+            timeout=10
         )
 
         if response.status_code == 200:
             data = response.json()
 
-            if data.get('features'):
+            if data.get('features') and len(data['features']) > 0:
                 feature = data['features'][0]
                 properties = feature['properties']
                 geometry = feature['geometry']
@@ -859,6 +880,8 @@ def validate_address_gouv(address: str) -> Dict:
 
     except requests.Timeout:
         result['error'] = "Timeout - API Adresse non accessible"
+    except requests.RequestException as e:
+        result['error'] = f"Erreur réseau : {str(e)}"
     except Exception as e:
         result['error'] = f"Erreur technique : {str(e)}"
 
