@@ -700,7 +700,7 @@ def extract_dates(text: str) -> List[str]:
     months = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
               'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
     month_pattern = '|'.join(months)
-    pattern2 = r'\b(\d{1,2})\s+({months})\s+(\d{{4}})\b'.format(months=month_pattern)
+    pattern2 = r'\b(\d{1,2})\s+({months})\s+(\d{4})\b'.format(months=month_pattern)
     dates.extend([match.group(0) for match in re.finditer(pattern2, text, re.IGNORECASE)])
 
     return list(set(dates))
@@ -2769,10 +2769,6 @@ def page_rapport():
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
-
-
-if __name__ == "__main__":
-    main()
 
 
 if __name__ == "__main__":
