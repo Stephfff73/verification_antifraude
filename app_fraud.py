@@ -2208,7 +2208,7 @@ def page_accueil():
     with col1:
         st.markdown("""
         **🏢 SIRET/SIREN**
-        - + de 15 patterns différents
+        - 15 patterns différents
         - Espaces, points, tirets
         - Avec/sans labels
         - Validation Luhn
