@@ -449,34 +449,6 @@ def extract_french_addresses_ultra(text: str) -> List[Dict]:
                 })
     
     return addresses
-                    'full_address': full,
-                    'numero': numero,
-                    'type_voie': type_voie,
-                    'nom_voie': nom_voie,
-                    'code_postal': code_postal,
-                    'ville': ville,
-                    'confidence': 0.88
-                })
-
-    # Dédoublonner par similarité
-    unique_addresses = []
-    for addr in addresses:
-        is_duplicate = False
-        for unique in unique_addresses:
-            if addresses_are_similar(addr['full_address'], unique['full_address']):
-                # Garder celle avec la meilleure confiance
-                if addr['confidence'] > unique['confidence']:
-                    unique_addresses.remove(unique)
-                else:
-                    is_duplicate = True
-                break
-        if not is_duplicate:
-            unique_addresses.append(addr)
-
-    # Trier par confiance décroissante
-    unique_addresses.sort(key=lambda x: x['confidence'], reverse=True)
-
-    return unique_addresses
 
 
 def validate_french_postal_code(cp: str) -> bool:
