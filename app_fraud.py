@@ -2195,7 +2195,7 @@ def page_accueil():
         <div class="metric-card">
             <h3 style="color: #3b82f6; text-align: center;">99.8%</h3>
             <p style="text-align: center;"><strong>Taux de détection</strong></p>
-            <small style="text-align: center; display: block;">Validations externes v4.0</small>
+            <small style="text-align: center; display: block;">Validations externes</small>
         </div>
         """, unsafe_allow_html=True)
 
