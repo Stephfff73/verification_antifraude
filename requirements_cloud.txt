@@ -1,0 +1,35 @@
+# ============================================
+# IN'LI ULTIMATE v4.0 - Requirements
+# OPTIMISÉ POUR STREAMLIT CLOUD
+# ============================================
+
+# ===== CORE DEPENDENCIES (100% COMPATIBLE) =====
+
+streamlit>=1.29.0
+pandas>=2.1.0
+numpy>=1.24.0
+PyPDF2>=3.0.0
+Pillow>=10.0.0
+requests>=2.31.0
+geopy>=2.4.0
+openpyxl>=3.1.0
+
+# ===== OPTIONAL - Peut échouer sur Streamlit Cloud =====
+# La validation DNS email peut être bloquée sur Streamlit Cloud
+# L'application gérera gracieusement l'échec (pas de crash)
+dnspython>=2.4.0
+
+# ===== NOTES STREAMLIT CLOUD =====
+#
+# Installation sur Streamlit Cloud :
+#   - PAS besoin de --break-system-packages
+#   - Les packages seront installés automatiquement
+#   - dnspython peut échouer mais n'empêche pas l'app de fonctionner
+#
+# Si dnspython échoue :
+#   - Validation email basique (regex) fonctionnera toujours
+#   - Pas de vérification DNS MX
+#   - Pas de crash, juste un warning dans les logs
+#
+# Versions Python supportées sur Streamlit Cloud : 3.9, 3.10, 3.11, 3.12
+#

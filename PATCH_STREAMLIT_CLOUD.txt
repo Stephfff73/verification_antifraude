@@ -1,0 +1,102 @@
+# ============================================
+# PATCH COMPATIBILITÉ STREAMLIT CLOUD
+# À appliquer au début de app_fraud_ultimate_v4.py
+# ============================================
+
+# REMPLACER LA LIGNE 31 :
+# import dns.resolver
+
+# PAR :
+
+# Import conditionnel pour dnspython (peut échouer sur Streamlit Cloud)
+try:
+    import dns.resolver
+    DNS_AVAILABLE = True
+except ImportError:
+    DNS_AVAILABLE = False
+    print("⚠️ Warning: dnspython not available - Email DNS validation disabled")
+
+
+# ============================================
+# PUIS MODIFIER LA FONCTION validate_email_advanced (ligne ~900)
+# ============================================
+
+# ANCIENNE VERSION :
+"""
+def validate_email_advanced(email: str) -> Dict:
+    # Vérification DNS MX
+    try:
+        mx_records = dns.resolver.resolve(domain, 'MX')
+        if mx_records:
+            result['domain_valid'] = True
+            result['valid'] = True
+            result['confidence'] = 0.9
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
+        result['warnings'].append("Domaine inexistant ou pas de serveur mail")
+    except Exception as e:
+        result['warnings'].append(f"Vérification DNS impossible : {str(e)}")
+        result['valid'] = True
+        result['confidence'] = 0.5
+"""
+
+# NOUVELLE VERSION (compatible Streamlit Cloud) :
+"""
+def validate_email_advanced(email: str) -> Dict:
+    # Vérification DNS MX (si disponible)
+    if DNS_AVAILABLE:
+        try:
+            mx_records = dns.resolver.resolve(domain, 'MX')
+            if mx_records:
+                result['domain_valid'] = True
+                result['valid'] = True
+                result['confidence'] = 0.9
+        except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
+            result['warnings'].append("Domaine inexistant ou pas de serveur mail")
+        except Exception as e:
+            result['warnings'].append(f"Vérification DNS impossible : {str(e)}")
+            result['valid'] = True
+            result['confidence'] = 0.5
+    else:
+        # DNS non disponible (Streamlit Cloud) - validation basique seulement
+        result['valid'] = True
+        result['confidence'] = 0.6
+        result['warnings'].append("Validation DNS non disponible (environnement cloud)")
+"""
+
+
+# ============================================
+# INSTRUCTIONS D'APPLICATION
+# ============================================
+
+# Option 1 : Modifier manuellement le fichier
+# 1. Ouvrir app_fraud_ultimate_v4.py
+# 2. Remplacer ligne 31 par le bloc try/except ci-dessus
+# 3. Modifier la fonction validate_email_advanced (ligne ~900)
+
+# Option 2 : Utiliser le fichier déjà patché
+# J'ai créé app_fraud_ultimate_v4_cloud.py avec ces modifications
+
+# ============================================
+# AVANTAGES DE CE PATCH
+# ============================================
+
+# ✅ Pas de crash si dnspython échoue
+# ✅ Validation email basique (regex) fonctionne toujours
+# ✅ Message clair dans les logs
+# ✅ Dégradation gracieuse de la fonctionnalité
+# ✅ 100% compatible Streamlit Cloud
+
+# ============================================
+# IMPACT SUR LES FONCTIONNALITÉS
+# ============================================
+
+# Avec DNS (local) :
+#   - Validation email complète (format + DNS MX)
+#   - Détection domaines invalides
+#   - Confiance 90%
+
+# Sans DNS (Streamlit Cloud) :
+#   - Validation email basique (format regex)
+#   - Détection emails jetables (liste hardcodée)
+#   - Confiance 60%
+#   - Tous les autres Red Flags fonctionnent normalement !
