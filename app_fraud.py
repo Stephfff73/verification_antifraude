@@ -338,6 +338,12 @@ def extract_french_addresses_ultra(text: str) -> List[Dict]:
         code_postal = pm.group(1)
         ville = pm.group(2).strip()
         
+        # FILTRE CRITIQUE : Vérifier que le code postal n'est pas précédé de "Matricule", "Code", etc.
+        text_before_cp = text_clean[max(0, pm.start()-20):pm.start()]
+        if re.search(r'(Matricule|Code|N°|Employee|ID)\s*$', text_before_cp, re.IGNORECASE):
+            # C'est un numéro de matricule, pas un code postal !
+            continue
+        
         # Valider le code postal
         if not validate_french_postal_code(code_postal):
             continue
@@ -1172,16 +1178,42 @@ def detect_red_flags(documents_data: Dict, structured_data: Dict, external_valid
     if 'siret_validation' in external_validations and external_validations['siret_validation']:
         siret_info = external_validations['siret_validation']
         if siret_info.get('exists') and siret_info.get('address') and company_addresses:
-            insee_address = siret_info['address'].lower().replace(' ', '')
+            insee_address = siret_info['address'].lower()
+            insee_address_clean = insee_address.replace(' ', '').replace(',', '').replace('-', '')
+            
+            # Extraire code postal de l'adresse INSEE
+            insee_cp_match = re.search(r'\b(\d{5})\b', insee_address)
+            insee_cp = insee_cp_match.group(1) if insee_cp_match else None
 
             match_found = False
             for comp_addr in company_addresses:
                 if isinstance(comp_addr, dict):
-                    comp_full = comp_addr.get('full_address', '').lower().replace(' ', '')
-                    # Vérifier code postal au minimum
-                    if comp_addr.get('code_postal') in siret_info['address']:
+                    comp_full = comp_addr.get('full_address', '').lower()
+                    comp_clean = comp_full.replace(' ', '').replace(',', '').replace('-', '')
+                    comp_cp = comp_addr.get('code_postal', '')
+                    
+                    # COMPARAISON INTELLIGENTE
+                    # Critère 1 : Code postal identique
+                    if insee_cp and comp_cp == insee_cp:
                         match_found = True
                         break
+                    
+                    # Critère 2 : Nom de rue similaire (au moins 70% de similarité)
+                    comp_rue = comp_addr.get('nom_voie', '').lower()
+                    if comp_rue and len(comp_rue) > 5:
+                        # Chercher le nom de rue dans l'adresse INSEE
+                        if comp_rue in insee_address or insee_address in comp_full:
+                            match_found = True
+                            break
+                    
+                    # Critère 3 : Similarité globale (au moins 50% des caractères en commun)
+                    if len(comp_clean) > 10 and len(insee_address_clean) > 10:
+                        # Compter les caractères communs
+                        common_chars = sum(1 for c in comp_clean if c in insee_address_clean)
+                        similarity = common_chars / max(len(comp_clean), len(insee_address_clean))
+                        if similarity > 0.5:
+                            match_found = True
+                            break
 
             if not match_found:
                 red_flags.append({
@@ -1258,30 +1290,47 @@ def perform_external_validations(documents_data: Dict, structured_data: Dict) ->
     for addr_context in all_addresses_with_context:
         addr = addr_context['address']
         addr_text = addr['full_address'].lower()
+        addr_cp = addr.get('code_postal', '')
         
         # L'adresse est-elle proche de l'adresse SIRET validée ?
         is_enterprise_address = False
         
         if validated_siret_address:
-            # Comparer code postal et début de rue
-            cp = addr.get('code_postal', '')
-            if cp and cp in validated_siret_address:
-                # Même code postal que l'entreprise
-                is_enterprise_address = True
+            # RÈGLE 1 : Comparer le code postal
+            siret_cp_match = re.search(r'\b(\d{5})\b', validated_siret_address)
+            if siret_cp_match:
+                siret_cp = siret_cp_match.group(1)
+                if addr_cp == siret_cp:
+                    # Même code postal = probablement entreprise
+                    is_enterprise_address = True
             
-            # Ou si très similaire (même rue par exemple)
-            addr_parts = addr_text.split(',')[0] if ',' in addr_text else addr_text
-            if addr_parts in validated_siret_address or validated_siret_address in addr_text:
-                is_enterprise_address = True
+            # RÈGLE 2 : Comparer le nom de la rue
+            addr_rue = addr.get('nom_voie', '').lower()
+            if addr_rue and len(addr_rue) > 5:  # Nom de rue significatif
+                if addr_rue in validated_siret_address:
+                    # Même rue = c'est l'entreprise
+                    is_enterprise_address = True
+            
+            # RÈGLE 3 : Si code postal DIFFÉRENT et pas même rue = DOMICILE
+            if addr_cp and siret_cp_match and addr_cp != siret_cp_match.group(1):
+                # Code postal différent = c'est probablement le domicile
+                is_enterprise_address = False
         
-        # Si le document contient un SIRET, c'est probablement l'adresse entreprise
-        if addr_context['has_siret']:
-            is_enterprise_address = True
-        
+        # Classification finale
         if is_enterprise_address:
             enterprise_addresses.append(addr)
         else:
-            home_addresses.append(addr)
+            # Si on a un SIRET validé et que l'adresse n'est pas celle de l'entreprise
+            # C'est probablement le domicile
+            if validated_siret_address:
+                home_addresses.append(addr)
+            else:
+                # Pas de SIRET validé : on ne peut pas classifier
+                # On met dans domicile par défaut si le doc n'a pas de SIRET
+                if not addr_context['has_siret']:
+                    home_addresses.append(addr)
+                else:
+                    enterprise_addresses.append(addr)
     
     # Si aucune classification n'a fonctionné, utiliser une heuristique simple
     if not home_addresses and not enterprise_addresses:
